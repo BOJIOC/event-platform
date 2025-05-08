@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Comment } from './comment.entity';
 import { CommentsService } from './comments.service';
 import { CommentsController } from './comments.controller';
+import { Comment } from './comment.entity';
 import { UsersModule } from '../users/users.module';
 import { EventsModule } from '../events/events.module';
 
@@ -10,10 +10,9 @@ import { EventsModule } from '../events/events.module';
   imports: [
     TypeOrmModule.forFeature([Comment]),
     UsersModule,
-    EventsModule,
+    EventsModule,       // ← чтобы в CommentsService можно было инжектить EventsService
   ],
-  controllers: [CommentsController],
   providers: [CommentsService],
-  exports: [CommentsService],
+  controllers: [CommentsController],
 })
 export class CommentsModule {}

@@ -5,24 +5,29 @@ import { RolesGuard } from './auth/guards/roles.guard';
 import { Reflector } from '@nestjs/core';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule)
+  const app = await NestFactory.create(AppModule);
 
-  app.enableCors()
+  // Разрешаем запросы с фронта
+  app.enableCors({
+    origin: 'http://localhost:5173',
+    credentials: true,
+  });
 
-  // 👇 ВАЖНО! Это говорит Nest, что все API начинаются с /api
-  app.setGlobalPrefix('api')
+  // Все маршруты под префиксом /api
+  app.setGlobalPrefix('api');
 
+  // Swagger
   const config = new DocumentBuilder()
     .setTitle('Event Platform API')
     .setDescription('API для платформы совместных мероприятий')
     .setVersion('1.0')
-    .build()
-  const document = SwaggerModule.createDocument(app, config)
-  SwaggerModule.setup('api', app, document)
+    .build();
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api', app, document);
 
-  app.useGlobalGuards(new RolesGuard(new Reflector()))
+  // Глобальный guard ролей
+  app.useGlobalGuards(new RolesGuard(new Reflector()));
 
-  await app.listen(3000)
+  await app.listen(3000);
 }
-bootstrap()
-
+bootstrap();

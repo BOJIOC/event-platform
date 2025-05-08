@@ -12,17 +12,16 @@ export class AuthService {
 
   async validateUser(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);
-    const isMatch = await bcrypt.compare(password, user?.password || '');
-    if (!user || !isMatch) throw new UnauthorizedException('Invalid credentials');
+    const isMatch = user && await bcrypt.compare(password, user.password);
+    if (!user || !isMatch) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
     return user;
   }
 
   async login(user: any) {
-    const payload = {
-      sub: user.id,
-      email: user.email,
-      role: user.role, // важно: добавляем роль в токен
-    };
+    // Включаем роль в полезную нагрузку
+    const payload = { sub: user.id, email: user.email, role: user.role };
     return {
       access_token: this.jwtService.sign(payload),
     };

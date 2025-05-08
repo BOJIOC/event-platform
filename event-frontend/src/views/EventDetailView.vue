@@ -1,6 +1,7 @@
 <template>
-  <v-container>
-    <v-card class="pa-4">
+  <v-container fluid>
+    <!-- Карточка события -->
+    <v-card class="pa-4 mb-6">
       <v-card-title class="text-h4">{{ event.title }}</v-card-title>
       <v-card-subtitle>
         {{ formatDate(event.date) }} • Организатор: {{ event.organizer.name }}
@@ -10,37 +11,34 @@
           v-if="!isParticipated"
           color="success"
           @click="joinEvent"
-        >
-          Присоединиться
-        </v-btn>
+        >Присоединиться</v-btn>
         <v-btn
           v-else
           color="error"
           @click="unjoinEvent"
-        >
-          Отписаться
-        </v-btn>
+        >Отписаться</v-btn>
       </v-card-actions>
     </v-card>
 
-    <!-- Табы -->
-    <v-tabs v-model="tab" class="mt-6">
+    <!-- Заголовки табов -->
+    <v-tabs v-model="tab" class="mb-4">
       <v-tab value="desc">Описание</v-tab>
       <v-tab value="parts">Участники ({{ event.participants.length }})</v-tab>
       <v-tab value="chat">Обсуждение</v-tab>
+      <v-tabs-slider />
     </v-tabs>
 
-    <!-- Контент табов -->
-    <v-tabs-items v-model="tab" class="mt-4">
-      <!-- Описание -->
-      <v-tabs-item value="desc">
+    <!-- Контент вкладок через v-window, без стрелок -->
+    <v-window v-model="tab" class="mt-2">
+      <!-- 1. Описание -->
+      <v-window-item value="desc">
         <v-card outlined class="pa-4">
           <div v-html="event.description"></div>
         </v-card>
-      </v-tabs-item>
+      </v-window-item>
 
-      <!-- Участники -->
-      <v-tabs-item value="parts">
+      <!-- 2. Участники -->
+      <v-window-item value="parts">
         <v-card outlined class="pa-4">
           <v-list two-line>
             <v-list-item
@@ -57,12 +55,11 @@
             </v-list-item>
           </v-list>
         </v-card>
-      </v-tabs-item>
+      </v-window-item>
 
-      <!-- Обсуждение -->
-      <v-tabs-item value="chat">
+      <!-- 3. Обсуждение -->
+      <v-window-item value="chat">
         <v-card outlined class="pa-4">
-          <!-- Список комментариев -->
           <v-list two-line>
             <v-list-item
               v-for="c in comments"
@@ -81,7 +78,6 @@
             </v-list-item>
           </v-list>
 
-          <!-- Форма нового комментария -->
           <v-form @submit.prevent="postComment" class="mt-4">
             <v-textarea
               v-model="newComment"
@@ -93,13 +89,12 @@
               type="submit"
               color="primary"
               :disabled="!newComment.trim()"
-            >
-              Отправить
-            </v-btn>
+              class="mt-2"
+            >Отправить</v-btn>
           </v-form>
         </v-card>
-      </v-tabs-item>
-    </v-tabs-items>
+      </v-window-item>
+    </v-window>
   </v-container>
 </template>
 
@@ -122,35 +117,39 @@ const event = ref<any>({
 })
 const comments = ref<any[]>([])
 const newComment = ref('')
-const tab = ref<'desc'|'parts'|'chat'>('desc')
+const tab = ref<'desc' | 'parts' | 'chat'>('desc')
 
-// Получаем userId из токена
-const payload = auth.token ? JSON.parse(atob(auth.token.split('.')[1])) : {}
+// Извлечём userId из токена
+const payload = auth.token
+  ? JSON.parse(atob(auth.token.split('.')[1]))
+  : {}
 const userId: number = payload.sub || payload.id
 
 // Загрузчики
 async function loadEvent() {
-  const { data } = await axios.get(`/events/${route.params.id}`, {
-    headers: { Authorization: `Bearer ${auth.token}` },
-  })
+  const { data } = await axios.get(
+    `/events/${route.params.id}`,
+    { headers: { Authorization: `Bearer ${auth.token}` } }
+  )
   event.value = data
 }
 
 async function loadComments() {
-  const { data } = await axios.get(`/events/${route.params.id}/comments`, {
-    headers: { Authorization: `Bearer ${auth.token}` },
-  })
+  const { data } = await axios.get(
+    `/events/${route.params.id}/comments`,
+    { headers: { Authorization: `Bearer ${auth.token}` } }
+  )
   comments.value = data
 }
 
-// Участие
+// Проверка участия
 const isParticipated = computed(() =>
   event.value.participants.some((p: any) => p.id === userId)
 )
 
 async function joinEvent() {
   await axios.post(
-    `/events/${route.params.id}/join`, {}, 
+    `/events/${route.params.id}/join`, {},
     { headers: { Authorization: `Bearer ${auth.token}` } }
   )
   await loadEvent()
@@ -158,13 +157,13 @@ async function joinEvent() {
 
 async function unjoinEvent() {
   await axios.post(
-    `/events/${route.params.id}/unjoin`, {}, 
+    `/events/${route.params.id}/unjoin`, {},
     { headers: { Authorization: `Bearer ${auth.token}` } }
   )
   await loadEvent()
 }
 
-// Комментарии
+// Отправка комментария
 async function postComment() {
   if (!newComment.value.trim()) return
   await axios.post(
@@ -179,17 +178,18 @@ async function postComment() {
 // Форматирование дат
 function formatDate(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('ru-RU', {
-    year: 'numeric', month: 'long', day: 'numeric'
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   })
 }
 function formatDateTime(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('ru-RU', {
     year: 'numeric', month: 'numeric', day: 'numeric',
-    hour: '2-digit', minute: '2-digit'
+    hour: '2-digit', minute: '2-digit',
   })
 }
 
-// Инициализация
 onMounted(async () => {
   await loadEvent()
   await loadComments()

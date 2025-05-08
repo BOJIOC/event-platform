@@ -46,6 +46,7 @@ const login = async () => {
     })
     const token = response.data.access_token
     auth.setToken(token)
+	localStorage.setItem('token', token)
     router.push('/events')
   } catch (err) {
     error.value = 'Неверный email или пароль'
