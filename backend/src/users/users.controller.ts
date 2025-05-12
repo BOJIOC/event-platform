@@ -1,51 +1,34 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Delete,
-  UseGuards,
+  Controller, Post, Get, Param, Body,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
-@ApiTags('Users')
+/**
+ * UsersController предоставляет:
+ * POST /users    — регистрация
+ * GET  /users    — список всех пользователей (для админа)
+ * GET  /users/:id — профиль по ID
+ */
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
+  /** Регистрация нового пользователя */
+  @Post()
+  create(@Body() dto: CreateUserDto) {
+    return this.usersService.create(dto);
+  }
+
+  /** Получить всех (не обязательно включать в публичный API) */
   @Get()
-  @ApiOperation({ summary: 'Получить всех пользователей' })
   findAll() {
     return this.usersService.findAll();
   }
 
+  /** Профиль по ID */
   @Get(':id')
-  @ApiOperation({ summary: 'Получить пользователя по ID' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: number) {
     return this.usersService.findOne(+id);
-  }
-
-  @Post()
-  @ApiOperation({ summary: 'Создать пользователя' })
-  create(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.create(createUserDto);
-  }
-
-  @Delete(':id')
-  @ApiOperation({ summary: 'Удалить пользователя' })
-  remove(@Param('id') id: string) {
-    return this.usersService.remove(+id);
-  }
-
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Получить текущего авторизованного пользователя' })
-  getProfile(@CurrentUser() user) {
-    return user;
   }
 }

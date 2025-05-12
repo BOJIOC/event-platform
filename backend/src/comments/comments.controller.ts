@@ -1,36 +1,33 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  UseGuards,
+  Controller, Get, Post, Param, Body, UseGuards, Req,
 } from '@nestjs/common';
 import { CommentsService } from './comments.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
-@ApiTags('Comments')
+/**
+ * CommentsController отвечает за эндпоинты:
+ * GET  /events/:id/comments
+ * POST /events/:id/comments
+ */
+@UseGuards(JwtAuthGuard)
 @Controller('events/:id/comments')
 export class CommentsController {
   constructor(private readonly commentsService: CommentsService) {}
 
+  /** GET текущий список комментариев к событию */
   @Get()
-  @ApiOperation({ summary: 'Список комментариев события' })
-  findForEvent(@Param('id') id: string) {
-    return this.commentsService.findForEvent(+id);
+  findAll(@Param('id') eventId: number) {
+    return this.commentsService.findAll(+eventId);
   }
 
+  /** POST новый комментарий — связывается с eventId и userId из req.user */
   @Post()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Добавить комментарий к событию' })
   create(
-    @Param('id') id: string,
-    @CurrentUser() user,
+    @Param('id') eventId: number,
+    @Req() req,
     @Body() dto: CreateCommentDto,
   ) {
-    return this.commentsService.create(+id, user.id, dto);
+    return this.commentsService.create(+eventId, req.user.id, dto.content);
   }
 }

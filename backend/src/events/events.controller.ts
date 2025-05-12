@@ -1,101 +1,86 @@
 import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Delete,
-  UseGuards,
-  Patch,
-  Query,
+  Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Req,
 } from '@nestjs/common';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
-import { ApiTags, ApiOperation } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { Roles } from '../auth/decorators/roles.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt.guard';
 
-@ApiTags('Events')
+/**
+ * EventsController обрабатывает HTTP-запросы для работы с мероприятиями.
+ * Все методы защищены JWT: без токена к эндпоинтам нельзя.
+ */
+@UseGuards(JwtAuthGuard)
 @Controller('events')
 export class EventsController {
   constructor(private readonly eventsService: EventsService) {}
 
+  /** GET /events — возвращает все события */
   @Get()
-  @ApiOperation({ summary: 'Получить все мероприятия' })
   findAll() {
     return this.eventsService.findAll();
   }
 
+  /** GET /events/search?... — фильтрация по title, from, to */
   @Get('search')
-  @ApiOperation({ summary: 'Поиск и фильтрация мероприятий по названию и дате' })
   search(
-    @Query('title') title?: string,
-    @Query('from') from?: string,
-    @Query('to') to?: string,
+    @Req() req,
   ) {
+    const { title, from, to } = req.query;
     return this.eventsService.searchEvents(title, from, to);
   }
 
-  @Get('my')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Мероприятия, созданные текущим пользователем' })
-  findMy(@CurrentUser() user) {
-    return this.eventsService.findMyEvents(user.id);
-  }
-
-  @Get('participated')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Мероприятия, в которых участвует текущий пользователь' })
-  findParticipated(@CurrentUser() user) {
-    console.log('[EventsController.findParticipated] user =', user);
-    return this.eventsService.findParticipatedEvents(user.id);
-  }
-
+  /** GET /events/:id — детали одного события */
   @Get(':id')
-  @ApiOperation({ summary: 'Получить мероприятие по ID' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: number) {
     return this.eventsService.findOne(+id);
   }
 
+  /** POST /events — создание нового события; организатор из JWT */
   @Post()
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Создать мероприятие (только для авторизованных)' })
-  create(@Body() dto: CreateEventDto, @CurrentUser() user) {
-    return this.eventsService.create(dto, user.id);
+  create(@Req() req, @Body() dto: CreateEventDto) {
+    const user = req.user; // payload из JwtStrategy
+    return this.eventsService.create(dto, user);
   }
 
-  @Post(':id/join')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Пользователь присоединяется к мероприятию' })
-  join(@Param('id') id: string, @CurrentUser() user) {
-    return this.eventsService.joinEvent(+id, user.id);
-  }
-
-  @Post(':id/unjoin')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Пользователь отписывается от мероприятия' })
-  unjoin(@Param('id') id: string, @CurrentUser() user) {
-    return this.eventsService.unjoinEvent(+id, user.id);
-  }
-
+  /** PATCH /events/:id — обновление события; только организатор или админ */
   @Patch(':id')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'Редактировать мероприятие (только организатор или админ)' })
   update(
-    @Param('id') id: string,
+    @Req() req,
+    @Param('id') id: number,
     @Body() dto: UpdateEventDto,
-    @CurrentUser() user,
   ) {
-    return this.eventsService.update(+id, user.id, dto, user.role);
+    const user = req.user;
+    return this.eventsService.update(+id, user, dto, user.role);
   }
 
+  /** DELETE /events/:id — удаление события по ID */
   @Delete(':id')
-  @UseGuards(JwtAuthGuard)
-  @Roles('admin')
-  @ApiOperation({ summary: 'Удалить мероприятие (только для админов)' })
-  remove(@Param('id') id: string) {
+  remove(@Param('id') id: number) {
     return this.eventsService.remove(+id);
+  }
+
+  /** POST /events/:id/join — присоединиться к событию */
+  @Post(':id/join')
+  join(@Req() req, @Param('id') id: number) {
+    return this.eventsService.joinEvent(+id, req.user);
+  }
+
+  /** POST /events/:id/unjoin — отписаться от события */
+  @Post(':id/unjoin')
+  unjoin(@Req() req, @Param('id') id: number) {
+    return this.eventsService.unjoinEvent(+id, req.user);
+  }
+
+  /** GET /events/my — мои созданные события (организатор) */
+  @Get('my')
+  findMy(@Req() req) {
+    return this.eventsService.findMyEvents(req.user.id);
+  }
+
+  /** GET /events/participated — события, где я участник */
+  @Get('participated')
+  findParticipated(@Req() req) {
+    return this.eventsService.findParticipatedEvents(req.user.id);
   }
 }

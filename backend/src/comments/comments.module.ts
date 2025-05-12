@@ -1,16 +1,21 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CommentsService } from './comments.service';
 import { CommentsController } from './comments.controller';
 import { Comment } from './comment.entity';
-import { UsersModule } from '../users/users.module';
 import { EventsModule } from '../events/events.module';
+import { UsersModule } from '../users/users.module';
 
+/**
+ * CommentsModule объединяет логику комментариев:
+ * - проверка события через EventsModule
+ * - проверка автора через UsersModule
+ */
 @Module({
   imports: [
     TypeOrmModule.forFeature([Comment]),
-    UsersModule,
-    EventsModule,       // ← чтобы в CommentsService можно было инжектить EventsService
+    forwardRef(() => EventsModule),
+    forwardRef(() => UsersModule),
   ],
   providers: [CommentsService],
   controllers: [CommentsController],

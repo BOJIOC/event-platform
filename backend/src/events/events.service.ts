@@ -1,146 +1,145 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Event } from './event.entity';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import { CreateEventDto } from './dto/create-event.dto';
-import { UsersService } from '../users/users.service';
+import { UpdateEventDto } from './dto/update-event.dto';
+import { Event } from './event.entity';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class EventsService {
   constructor(
     @InjectRepository(Event)
-    private eventsRepository: Repository<Event>,
-    private usersService: UsersService,
+    private readonly eventRepository: Repository<Event>,
   ) {}
 
-  findAll(): Promise<Event[]> {
-    return this.eventsRepository.find({ relations: ['organizer', 'participants'] });
+  /**
+   * Возвращает все события, вместе с организатором и участниками.
+   */
+  async findAll(): Promise<Event[]> {
+    return this.eventRepository.find({
+      relations: ['organizer', 'participants'],
+    });
   }
 
+  /**
+   * Ищет события по названию и диапазону дат.
+   * Строит dynamic SQL через QueryBuilder:
+   * - ILIKE для нечувствительного к регистру поиска по названию
+   * - >= / <= для фильтрации по дате
+   */
+  async searchEvents(
+    title?: string,
+    from?: string,
+    to?: string,
+  ): Promise<Event[]> {
+    const qb: SelectQueryBuilder<Event> = this.eventRepository
+      .createQueryBuilder('event')
+      .leftJoinAndSelect('event.organizer', 'organizer')
+      .leftJoinAndSelect('event.participants', 'participants');
+
+    if (title) {
+      qb.andWhere('event.title ILIKE :title', { title: `%${title}%` });
+    }
+    if (from) {
+      qb.andWhere('event.date >= :from', { from });
+    }
+    if (to) {
+      qb.andWhere('event.date <= :to', { to });
+    }
+
+    return qb.getMany();
+  }
+
+  /**
+   * Возвращает одно событие по ID.
+   * Бросает NotFoundException, если не найдено.
+   */
   async findOne(id: number): Promise<Event> {
-    const event = await this.eventsRepository.findOne({
+    const event = await this.eventRepository.findOne({
       where: { id },
       relations: ['organizer', 'participants'],
     });
-
     if (!event) {
-      throw new NotFoundException(`Event with ID ${id} not found`);
+      throw new NotFoundException(`Event with id=${id} not found`);
     }
-
     return event;
   }
-  
-	async findMyEvents(userId: number): Promise<Event[]> {
-	  return this.eventsRepository.find({
-		where: { organizer: { id: userId } },
-		relations: ['organizer', 'participants'],
-	  });
-	}
 
-async findParticipatedEvents(userId: number): Promise<Event[]> {
-  try {
-    console.log('[findParticipatedEvents] userId =', userId)
-
-    return await this.eventsRepository
-      .createQueryBuilder('event')
-      .leftJoinAndSelect('event.participants', 'participant')
-      .leftJoinAndSelect('event.organizer', 'organizer')
-      .where('participant.id = :userId', { userId })
-      .getMany()
-  } catch (error) {
-    console.error('[findParticipatedEvents] Ошибка:', error)
-    throw new Error('Ошибка получения мероприятий')
-  }
-}
-
-
-async unjoinEvent(eventId: number, userId: number): Promise<Event> {
-  const event = await this.findOne(eventId);
-  const user = await this.usersService.findOne(userId);
-
-  if (!event.participants) {
-    event.participants = [];
+  /**
+   * Создаёт новое событие, связывая DTO и пользователя-организатора.
+   */
+  async create(dto: CreateEventDto, organizer: User): Promise<Event> {
+    const event = this.eventRepository.create({ ...dto, organizer });
+    return this.eventRepository.save(event);
   }
 
-  event.participants = event.participants.filter((p) => p.id !== user.id);
-
-  return this.eventsRepository.save(event);
-}
-
-
-  async create(data: CreateEventDto, organizerId: number): Promise<Event> {
-    const organizer = await this.usersService.findOne(organizerId);
-
-    const event = this.eventsRepository.create({
-      ...data,
-      organizer,
-    });
-
-    return this.eventsRepository.save(event);
-  }
-
-  async joinEvent(eventId: number, userId: number): Promise<Event> {
-    const event = await this.findOne(eventId);
-    const user = await this.usersService.findOne(userId);
-
-    if (!event.participants) {
-      event.participants = [];
+  /**
+   * Позволяет пользователю присоединиться к событию:
+   * - Проверяет, что он ещё не участник
+   * - Добавляет в массив participants
+   */
+  async joinEvent(id: number, user: User): Promise<void> {
+    const event = await this.findOne(id);
+    if (event.participants.some(p => p.id === user.id)) {
+      return; // уже присоединён
     }
+    event.participants.push(user);
+    await this.eventRepository.save(event);
+  }
 
-    // Предотвратим повторное добавление
-    if (!event.participants.some(p => p.id === user.id)) {
-      event.participants.push(user);
+  /**
+   * Удаляет пользователя из participants.
+   */
+  async unjoinEvent(id: number, user: User): Promise<void> {
+    const event = await this.findOne(id);
+    event.participants = event.participants.filter(p => p.id !== user.id);
+    await this.eventRepository.save(event);
+  }
+
+  /**
+   * Обновляет событие: только организатор или админ.
+   */
+  async update(
+    id: number,
+    user: User,
+    dto: UpdateEventDto,
+    role: string,
+  ): Promise<Event> {
+    const event = await this.findOne(id);
+    if (event.organizer.id !== user.id && role !== 'admin') {
+      throw new ForbiddenException();
     }
-
-    return this.eventsRepository.save(event);
+    Object.assign(event, dto);
+    return this.eventRepository.save(event);
   }
 
-	async update(
-	  eventId: number,
-	  userId: number,
-	  data: Partial<{ title: string; description: string; date: Date }>,
-	  userRole: string,
-	): Promise<Event> {
-	  const event = await this.findOne(eventId);
-
-	  // Только организатор или админ
-	  if (event.organizer.id !== userId && userRole !== 'admin') {
-		throw new Error('Нет доступа к редактированию этого мероприятия');
-	  }
-
-	  Object.assign(event, data);
-	  return this.eventsRepository.save(event);
-	}
-
-async searchEvents(
-  title?: string,
-  from?: string,
-  to?: string,
-): Promise<Event[]> {
-  const query = this.eventsRepository
-    .createQueryBuilder('event')
-    .leftJoinAndSelect('event.organizer', 'organizer')
-    .leftJoinAndSelect('event.participants', 'participants');
-
-  if (title) {
-    query.andWhere('LOWER(event.title) LIKE LOWER(:title)', {
-      title: `%${title}%`,
-    });
-  }
-
-  if (from) {
-    query.andWhere('event.date >= :from', { from });
-  }
-
-  if (to) {
-    query.andWhere('event.date <= :to', { to });
-  }
-
-  return query.getMany();
-}
-
-
+  /**
+   * Удаляет событие по ID.
+   */
   async remove(id: number): Promise<void> {
-    await this.eventsRepository.delete(id);
+    await this.eventRepository.delete(id);
+  }
+
+  /**
+   * Возвращает события, созданные данным пользователем.
+   */
+  async findMyEvents(userId: number): Promise<Event[]> {
+    return this.eventRepository.find({
+      where: { organizer: { id: userId } },
+      relations: ['organizer', 'participants'],
+    });
+  }
+
+  /**
+   * Возвращает события, в которых участвует данный пользователь.
+   */
+  async findParticipatedEvents(userId: number): Promise<Event[]> {
+    return this.eventRepository
+      .createQueryBuilder('event')
+      .leftJoinAndSelect('event.participants', 'p')
+      .where('p.id = :userId', { userId })
+      .leftJoinAndSelect('event.organizer', 'organizer')
+      .getMany();
   }
 }

@@ -1,46 +1,42 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { User } from './user.entity';
-import { CreateUserDto } from './dto/create-user.dto';
 import * as bcrypt from 'bcrypt';
+import { CreateUserDto } from './dto/create-user.dto';
+import { User } from './user.entity';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
-    private usersRepository: Repository<User>,
+    private readonly userRepository: Repository<User>,
   ) {}
 
-  findAll(): Promise<User[]> {
-    return this.usersRepository.find({ relations: ['events', 'eventsAsParticipant'] });
+  /**
+   * Создаёт нового пользователя:
+   * - Хэширует пароль (bcrypt, 10 раундов)
+   * - Сохраняет в БД
+   */
+  async create(dto: CreateUserDto): Promise<User> {
+    const hash = await bcrypt.hash(dto.password, 10);
+    const user = this.userRepository.create({ ...dto, password: hash });
+    return this.userRepository.save(user);
   }
 
-  async findOne(id: number): Promise<User> {
-    const user = await this.usersRepository.findOne({
-      where: { id },
-      relations: ['events', 'eventsAsParticipant'],
-    });
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
+  /**
+   * Находит пользователя по email.
+   * Бросает NotFoundException, если не найден.
+   */
+  async findByEmail(email: string): Promise<User> {
+    const user = await this.userRepository.findOne({ where: { email } });
+    if (!user) throw new NotFoundException(`User with email=${email} not found`);
     return user;
   }
 
-  async create(data: CreateUserDto): Promise<User> {
-    const hashedPassword = await bcrypt.hash(data.password, 10);
-    const user = this.usersRepository.create({
-      ...data,
-      password: hashedPassword,
-    });
-    return this.usersRepository.save(user);
-  }
-
-	async findByEmail(email: string): Promise<User | null> {
-	  return this.usersRepository.findOne({ where: { email } });
-	}
-
-  async remove(id: number): Promise<void> {
-    await this.usersRepository.delete(id);
+  /**
+   * Возвращает пользователя по ID.
+   */
+  async findOne(id: number): Promise<User> {
+    return this.userRepository.findOneOrFail({ where: { id } });
   }
 }
