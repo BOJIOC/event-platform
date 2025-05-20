@@ -1,34 +1,19 @@
-import {
-  Controller, Post, Get, Param, Body,
-} from '@nestjs/common';
+import { Controller, Post, Body, HttpCode } from '@nestjs/common';
+import { ApiTags, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 
-/**
- * UsersController предоставляет:
- * POST /users    — регистрация
- * GET  /users    — список всех пользователей (для админа)
- * GET  /users/:id — профиль по ID
- */
+@ApiTags('users')
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /** Регистрация нового пользователя */
+  @HttpCode(201)
   @Post()
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({ status: 201, description: 'Пользователь успешно создан' })
+  @ApiResponse({ status: 409, description: 'Пользователь с таким email уже существует' })
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
-  }
-
-  /** Получить всех (не обязательно включать в публичный API) */
-  @Get()
-  findAll() {
-    return this.usersService.findAll();
-  }
-
-  /** Профиль по ID */
-  @Get(':id')
-  findOne(@Param('id') id: number) {
-    return this.usersService.findOne(+id);
   }
 }

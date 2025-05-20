@@ -20,3 +20,4 @@ export class CreateEventDto {
   @IsDateString({}, { message: 'Дата должна быть в формате ISO YYYY-MM-DDThh:mm:ssZ' })
   date: string;
 }
+

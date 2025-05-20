@@ -10,29 +10,27 @@ export class AuthService {
     private readonly jwtService: JwtService,
   ) {}
 
-  /**
-   * Проверяет email и пароль:
-   * 1) находит пользователя по email
-   * 2) сравнивает хэш пароля через bcrypt.compare
-   * 3) в случае успеха возвращает объект пользователя без пароля
-   */
-  async validateUser(email: string, pass: string): Promise<any> {
+  async validateUser(email: string, password: string): Promise<any> {
+    console.log('Trying login for', email, 'with password', password);
     const user = await this.usersService.findByEmail(email);
-    if (user && (await bcrypt.compare(pass, user.password))) {
-      const { password, ...result } = user;
-      return result;
+    console.log('Found user:', user);
+    if (user === null) {
+      throw new UnauthorizedException('Неправильный email или пароль');
     }
-    return null;
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    console.log('Password match?', isMatch);
+    if (!isMatch) {
+      throw new UnauthorizedException('Неправильный email или пароль');
+    }
+
+    // Теперь user точно не null и имеет поле password
+    const { password: _, ...result } = user;
+    return result;
   }
 
-  /**
-   * Генерирует JWT-токен:
-   * payload включает userId, email и роль
-   */
   async login(user: any): Promise<{ access_token: string }> {
     const payload = { sub: user.id, email: user.email, role: user.role };
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
+    return { access_token: this.jwtService.sign(payload) };
   }
 }

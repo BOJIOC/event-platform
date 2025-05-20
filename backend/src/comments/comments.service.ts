@@ -1,49 +1,45 @@
+// src/comments/comments.service.ts
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Comment } from './comment.entity';
+import { CreateCommentDto } from './dto/create-comment.dto';
 import { EventsService } from '../events/events.service';
-import { UsersService } from '../users/users.service';
+import { User } from '../users/user.entity';
 
 @Injectable()
 export class CommentsService {
   constructor(
     @InjectRepository(Comment)
-    private readonly commentRepository: Repository<Comment>,
+    private readonly commentRepo: Repository<Comment>,
     private readonly eventsService: EventsService,
-    private readonly usersService: UsersService,
+    @InjectRepository(User)
+    private readonly userRepo: Repository<User>,
   ) {}
 
-  /**
-   * Возвращает все комментарии для события с сортировкой по времени.
-   */
   async findAll(eventId: number): Promise<Comment[]> {
-    await this.eventsService.findOne(eventId); // проверка существования события
-    return this.commentRepository.find({
+    await this.eventsService.findOne(eventId);
+    return this.commentRepo.find({
       where: { event: { id: eventId } },
-      order: { createdAt: 'ASC' },
       relations: ['author'],
     });
   }
 
-  /**
-   * Создаёт новый комментарий:
-   * 1) проверяет событие
-   * 2) загружает автора
-   * 3) сохраняет комментарий с датой
-   */
   async create(
     eventId: number,
+    dto: CreateCommentDto,
     userId: number,
-    content: string,
   ): Promise<Comment> {
     const event = await this.eventsService.findOne(eventId);
-    const author = await this.usersService.findOne(userId);
-    const comment = this.commentRepository.create({
-      content,
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const comment = this.commentRepo.create({
+      content: dto.content,
       event,
-      author,
+      author: user,
     });
-    return this.commentRepository.save(comment);
+    return this.commentRepo.save(comment);
   }
 }

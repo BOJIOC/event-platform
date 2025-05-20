@@ -5,7 +5,7 @@
       <v-col>
         <h1 class="text-h4">Все мероприятия</h1>
       </v-col>
-      <v-col class="d-flex justify-end">
+      <v-col class="d-flex justify-end" v-if="isLoggedIn">
         <router-link to="/events/new">
           <v-btn color="secondary" dark>Создать событие</v-btn>
         </router-link>
@@ -62,9 +62,7 @@
     >
       <v-card-title class="d-flex align-center">
         <div class="flex-grow-1">{{ event.title }}</div>
-        <router-link
-          :to="{ name: 'event-detail', params: { id: event.id } }"
-        >
+        <router-link :to="{ name: 'event-detail', params: { id: event.id } }">
           <v-btn text small class="ms-2">Подробнее</v-btn>
         </router-link>
       </v-card-title>
@@ -74,14 +72,14 @@
 
       <v-card-actions>
         <v-btn
-          v-if="!isParticipated(event)"
+          v-if="isLoggedIn && !isParticipated(event)"
           color="success"
           @click="joinEvent(event.id)"
         >
           Присоединиться
         </v-btn>
         <v-btn
-          v-else
+          v-else-if="isLoggedIn && isParticipated(event)"
           color="error"
           @click="unjoinEvent(event.id)"
         >
@@ -96,27 +94,32 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
+import { ref, onMounted, computed } from 'vue'
+import api from '@/axios'
 import FlatPickr from 'vue-flatpickr-component'
 import 'flatpickr/dist/flatpickr.css'
 import { useAuthStore } from '@/stores/auth'
 
-// Настройка Flatpickr
+/** Настройка Flatpickr */
 const fpConfig = {
   dateFormat: 'Y-m-d',
   altInput: true,
   altFormat: 'd.m.Y',
 }
 
-// Auth + userId из токена
-const auth = useAuthStore()
-const token = auth.token
-const payload = token ? JSON.parse(atob(token.split('.')[1])) : {}
-const userId: number = payload.sub || payload.id
+interface Event {
+  id: number
+  title: string
+  description: string
+  date: string
+  organizer: { id: number; name: string }
+  participants: Array<{ id: number }>
+}
 
-// Состояние
-const events = ref<any[]>([])
+const auth = useAuthStore()
+const isLoggedIn = computed(() => auth.isLoggedIn)
+
+const events = ref<Event[]>([])
 const error = ref<string | null>(null)
 const filter = ref<{ title: string; from: string; to: string }>({
   title: '',
@@ -124,19 +127,16 @@ const filter = ref<{ title: string; from: string; to: string }>({
   to: '',
 })
 
-// Загрузка с фильтрацией
+/** Загрузка с фильтрацией */
 async function loadEvents() {
-  try {
-    error.value = null
-    const params: any = {}
-    if (filter.value.title) params.title = filter.value.title
-    if (filter.value.from)  params.from  = filter.value.from
-    if (filter.value.to)    params.to    = filter.value.to
+  error.value = null
+  const params: any = {}
+  if (filter.value.title) params.title = filter.value.title
+  if (filter.value.from) params.from = filter.value.from
+  if (filter.value.to) params.to = filter.value.to
 
-    const res = await axios.get('/events/search', {
-      headers: { Authorization: `Bearer ${token}` },
-      params,
-    })
+  try {
+    const res = await api.get<Event[]>('/events/search', { params })
     events.value = res.data
   } catch (e) {
     console.error(e)
@@ -144,38 +144,46 @@ async function loadEvents() {
   }
 }
 
-// Очистить фильтры по дате
+/** Очистить фильтры по дате */
 function clearDates() {
   filter.value.from = ''
   filter.value.to = ''
   loadEvents()
 }
 
-// Проверка участия
-function isParticipated(ev: any): boolean {
-  return ev.participants.some((p: any) => p.id === userId)
+/** Проверка участия */
+function isParticipated(ev: Event): boolean {
+  return auth.user
+    ? ev.participants.some((p) => p.id === auth.user!.id)
+    : false
 }
 
-// Присоединиться / отписаться
+/** Присоединиться / отписаться */
 async function joinEvent(id: number) {
-  await axios.post(
-    `/events/${id}/join`, {},
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  loadEvents()
+  try {
+    await api.post(`/events/${id}/join`)
+    loadEvents()
+  } catch (e) {
+    console.error(e)
+    error.value = 'Не удалось присоединиться'
+  }
 }
 async function unjoinEvent(id: number) {
-  await axios.post(
-    `/events/${id}/unjoin`, {},
-    { headers: { Authorization: `Bearer ${token}` } }
-  )
-  loadEvents()
+  try {
+    await api.post(`/events/${id}/unjoin`)
+    loadEvents()
+  } catch (e) {
+    console.error(e)
+    error.value = 'Не удалось отписаться'
+  }
 }
 
-// Формат даты для отображения
+/** Формат даты для отображения */
 function formatDate(d: string): string {
   return new Date(d).toLocaleDateString('ru-RU', {
-    year: 'numeric', month: 'long', day: 'numeric',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
   })
 }
 

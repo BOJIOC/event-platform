@@ -1,3 +1,4 @@
+// src/events/event.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -5,9 +6,11 @@ import {
   ManyToOne,
   ManyToMany,
   OneToMany,
+  JoinTable,
 } from 'typeorm';
 import { User } from '../users/user.entity';
-import { Comment } from '../comments/comment.entity';  // ← импорт
+import { Comment } from '../comments/comment.entity';
+import { Task } from '../tasks/task.entity';
 
 @Entity()
 export class Event {
@@ -17,21 +20,23 @@ export class Event {
   @Column()
   title: string;
 
-  @Column()
-  description: string;
+  // Разрешаем NULL, чтобы синхронизация не падала
+  @Column('text', { nullable: true })
+  description: string | null;
 
   @Column()
   date: Date;
 
-  /** Организатор события */
-  @ManyToOne(() => User, (user) => user.events)
+  @ManyToOne(() => User, (user) => user.events, { eager: true })
   organizer: User;
 
-  /** Участники события */
-  @ManyToMany(() => User, (user) => user.eventsAsParticipant)
-  participants: User[];
+	@ManyToMany(() => User, (user) => user.eventsAsParticipant)
+	@JoinTable({ name: 'user_events_as_participant_event' }) // ЯВНО имя!
+	participants: User[];
 
-  /** Комментарии к событию */
   @OneToMany(() => Comment, (comment) => comment.event, { cascade: true })
   comments: Comment[];
+
+  @OneToMany(() => Task, (task) => task.event, { cascade: true })
+  tasks: Task[];
 }

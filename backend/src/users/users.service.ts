@@ -1,9 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { CreateUserDto } from './dto/create-user.dto';
 import { User } from './user.entity';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Injectable()
 export class UsersService {
@@ -12,31 +12,19 @@ export class UsersService {
     private readonly userRepository: Repository<User>,
   ) {}
 
-  /**
-   * Создаёт нового пользователя:
-   * - Хэширует пароль (bcrypt, 10 раундов)
-   * - Сохраняет в БД
-   */
+  /** Создаёт пользователя, хешируя пароль */
   async create(dto: CreateUserDto): Promise<User> {
+    const exists = await this.userRepository.findOne({ where: { email: dto.email } });
+    if (exists) {
+      throw new ConflictException('Пользователь с таким email уже существует');
+    }
     const hash = await bcrypt.hash(dto.password, 10);
     const user = this.userRepository.create({ ...dto, password: hash });
     return this.userRepository.save(user);
   }
 
-  /**
-   * Находит пользователя по email.
-   * Бросает NotFoundException, если не найден.
-   */
-  async findByEmail(email: string): Promise<User> {
-    const user = await this.userRepository.findOne({ where: { email } });
-    if (!user) throw new NotFoundException(`User with email=${email} not found`);
-    return user;
-  }
-
-  /**
-   * Возвращает пользователя по ID.
-   */
-  async findOne(id: number): Promise<User> {
-    return this.userRepository.findOneOrFail({ where: { id } });
+  /** Ищет пользователя по email */
+  async findByEmail(email: string): Promise<User | null> {
+    return this.userRepository.findOne({ where: { email } });
   }
 }

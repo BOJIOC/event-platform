@@ -1,22 +1,18 @@
+// src/users/dto/create-user.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import { IsEmail, IsString, MinLength } from 'class-validator';
 
-/**
- * CreateUserDto для POST /users — регистрация нового аккаунта.
- * Проверяет корректность email, минимальную длину пароля и не пустое имя.
- */
 export class CreateUserDto {
-  @ApiProperty({ description: 'Имя и фамилия пользователя' })
+  @ApiProperty({ example: 'Иван Иванов', description: 'Имя пользователя' })
   @IsString()
-  @MinLength(2, { message: 'Имя должно быть не короче 2 символов' })
   name: string;
 
-  @ApiProperty({ description: 'Email для входа' })
-  @IsEmail({}, { message: 'Неверный формат email' })
+  @ApiProperty({ example: 'user@example.com', description: 'Email пользователя' })
+  @IsEmail()
   email: string;
 
-  @ApiProperty({ description: 'Пароль (минимум 6 символов)' })
+  @ApiProperty({ example: 'пароль123', description: 'Пароль пользователя' })
   @IsString()
-  @MinLength(6, { message: 'Пароль должен быть не короче 6 символов' })
+  @MinLength(6)
   password: string;
 }

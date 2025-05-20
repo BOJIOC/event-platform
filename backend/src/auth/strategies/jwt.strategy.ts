@@ -7,16 +7,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor() {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      secretOrKey: 'jwt_secret_key',            // совпадает с jwtModule.register
+      ignoreExpiration: false,
+      secretOrKey: 'jwt_secret_key', // Должен совпадать с JwtModule
     });
   }
 
-  async validate(payload: any) {
-    // payload содержит { sub, email, role }
-    return {
-      id: payload.sub,
-      email: payload.email,
-      role: payload.role,
-    };
+  validate(payload: any) {
+    console.log('JWT VALIDATE', payload); // Лог для дебага
+    // возвращаем user-объект для req.user
+    return { id: payload.sub, email: payload.email, role: payload.role };
   }
 }
